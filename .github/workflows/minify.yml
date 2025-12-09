@@ -1,0 +1,53 @@
+name: Minify JavaScript
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.js'
+      - '!**.min.js'  # Don't trigger on already minified files
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  minify:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install Google Closure Compiler
+        run: npm install -g google-closure-compiler
+      
+      - name: Minify JavaScript files
+        run: |
+          # Find all .js files that aren't already minified
+          find . -name "*.js" ! -name "*.min.js" ! -path "*/node_modules/*" | while read file; do
+            output="${file%.js}.min.js"
+            echo "Minifying $file -> $output"
+            google-closure-compiler \
+              --js="$file" \
+              --js_output_file="$output" \
+              --compilation_level=ADVANCED \
+              --warning_level=QUIET
+          done
+      
+      - name: Commit minified files
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add "*.min.js"
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-minify JavaScript files"
+      
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
